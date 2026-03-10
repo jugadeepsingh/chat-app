@@ -1,28 +1,12 @@
-const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const userSchema = mongoose.Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true },
-    password: { type: String, required: true },
-    image: { type: String, default: "" },
-    status: { type: String, default: "Hey there! I am using ChatApp." },
-    isAdmin: { type: Boolean, default: false },
-  },
-  { timestamps: true }
-);
-
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
+const User = sequelize.define('User', {
+  id:       { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  name:     { type: DataTypes.STRING, allowNull: false },
+  email:    { type: DataTypes.STRING, allowNull: false, unique: true },
+  password: { type: DataTypes.STRING, allowNull: false },
+  pic:      { type: DataTypes.STRING, defaultValue: 'https://icon-library.com/images/anonymous-avatar-icon/anonymous-avatar-icon-25.jpg' },
 });
 
-userSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
-};
-
-const User = mongoose.model("User", userSchema);
 module.exports = User;

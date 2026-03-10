@@ -5,13 +5,17 @@ const http = require("http");
 const { Server } = require("socket.io");
 const connectDB = require("./config/db");
 
-dotenv.config();
-connectDB();
+// CHANGE THIS LINE at the top:
+const { connectDB } = require('./config/db');
 
-const app = express();
-app.use(cors({ origin: "http://localhost:3000", credentials: true }));
-app.use(express.json());
-
+// ADD THIS at the bottom, before app.listen:
+const path = require('path');
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/build')));
+  app.get('*', (req, res) =>
+    res.sendFile(path.resolve(__dirname, '../client', 'build', 'index.html'))
+  );
+}
 // Routes
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/chats", require("./routes/chatRoutes"));

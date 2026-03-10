@@ -1,15 +1,12 @@
-const mongoose = require("mongoose");
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const chatSchema = mongoose.Schema(
-  {
-    chatName: { type: String, trim: true },
-    isGroupChat: { type: Boolean, default: false },
-    users: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-    latestMessage: { type: mongoose.Schema.Types.ObjectId, ref: "Message" },
-    groupAdmin: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-  },
-  { timestamps: true }
-);
+const Chat = sequelize.define('Chat', {
+  id:              { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  chatName:        { type: DataTypes.STRING },
+  isGroupChat:     { type: DataTypes.BOOLEAN, defaultValue: false },
+  groupAdminId:    { type: DataTypes.UUID, allowNull: true },
+  latestMessageId: { type: DataTypes.UUID, allowNull: true },
+});
 
-const Chat = mongoose.model("Chat", chatSchema);
 module.exports = Chat;

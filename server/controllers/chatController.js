@@ -1,160 +1,50 @@
-const Chat = require("../models/Chat");
-const User = require("../models/User");
+const { Chat, User } = require('../models');
 
-// @desc  Access or create one-on-one chat
-// @route POST /api/chats
-const accessChat = async (req, res) => {
+exports.accessChat = async (req, res) => {
   const { userId } = req.body;
-  if (!userId) return res.status(400).json({ message: "userId is required" });
-
-  try {
-    let chat = await Chat.find({
-      isGroupChat: false,
-      $and: [
-        { users: { $elemMatch: { $eq: req.user._id } } },
-        { users: { $elemMatch: { $eq: userId } } },
-      ],
-    })
-      .populate("users", "-password")
-      .populate("latestMessage");
-
-    chat = await User.populate(chat, {
-      path: "latestMessage.sender",
-      select: "name email image",
-    });
-
-    if (chat.length > 0) {
-      res.json(chat[0]);
-    } else {
-      const newChat = await Chat.create({
-        chatName: "Direct Message",
-        isGroupChat: false,
-        users: [req.user._id, userId],
-      });
-      const fullChat = await Chat.findOne({ _id: newChat._id }).populate(
-        "users",
-        "-password"
-      );
-      res.status(201).json(fullChat);
-    }
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  let chat = await Chat.findOne({
+    where: { isGroupChat: false },
+    include: [{ model: User, as: 'users', where: { id: userId }, attributes: [] }],
+  });
+  if (!chat) {
+    chat = await Chat.create({ chatName: 'direct', isGroupChat: false });
+    await chat.addUsers([req.user.id, userId]);
   }
+  res.json(chat);
 };
 
-// @desc  Get all chats for a user
-// @route GET /api/chats
-const fetchChats = async (req, res) => {
-  try {
-    let chats = await Chat.find({
-      users: { $elemMatch: { $eq: req.user._id } },
-    })
-      .populate("users", "-password")
-      .populate("groupAdmin", "-password")
-      .populate("latestMessage")
-      .sort({ updatedAt: -1 });
-
-    chats = await User.populate(chats, {
-      path: "latestMessage.sender",
-      select: "name email image",
-    });
-    res.json(chats);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+exports.fetchChats = async (req, res) => {
+  const chats = await Chat.findAll({
+    include: [{ model: User, as: 'users', attributes: ['id', 'name', 'email', 'pic'] }],
+  });
+  res.json(chats);
 };
 
-// @desc  Create group chat
-// @route POST /api/chats/group
-const createGroupChat = async (req, res) => {
-  if (!req.body.users || !req.body.name)
-    return res.status(400).json({ message: "Please fill all fields" });
-
-  let users = JSON.parse(req.body.users);
-  if (users.length < 2)
-    return res
-      .status(400)
-      .json({ message: "Group chat requires more than 2 users" });
-
-  users.push(req.user);
-  try {
-    const groupChat = await Chat.create({
-      chatName: req.body.name,
-      users,
-      isGroupChat: true,
-      groupAdmin: req.user,
-    });
-    const fullGroupChat = await Chat.findOne({ _id: groupChat._id })
-      .populate("users", "-password")
-      .populate("groupAdmin", "-password");
-    res.status(201).json(fullGroupChat);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+exports.createGroupChat = async (req, res) => {
+  const { users, name } = req.body;
+  const group = await Chat.create({
+    chatName: name, isGroupChat: true, groupAdminId: req.user.id,
+  });
+  await group.addUsers([...JSON.parse(users), req.user.id]);
+  res.json(group);
 };
 
-// @desc  Rename group chat
-// @route PUT /api/chats/group/rename
-const renameGroup = async (req, res) => {
+exports.renameGroup = async (req, res) => {
   const { chatId, chatName } = req.body;
-  try {
-    const updatedChat = await Chat.findByIdAndUpdate(
-      chatId,
-      { chatName },
-      { new: true }
-    )
-      .populate("users", "-password")
-      .populate("groupAdmin", "-password");
-    if (!updatedChat) return res.status(404).json({ message: "Chat not found" });
-    res.json(updatedChat);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  await Chat.update({ chatName }, { where: { id: chatId } });
+  res.json({ message: 'Renamed successfully' });
 };
 
-// @desc  Add user to group
-// @route PUT /api/chats/group/add
-const addToGroup = async (req, res) => {
+exports.addToGroup = async (req, res) => {
   const { chatId, userId } = req.body;
-  try {
-    const added = await Chat.findByIdAndUpdate(
-      chatId,
-      { $push: { users: userId } },
-      { new: true }
-    )
-      .populate("users", "-password")
-      .populate("groupAdmin", "-password");
-    if (!added) return res.status(404).json({ message: "Chat not found" });
-    res.json(added);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  const chat = await Chat.findByPk(chatId);
+  await chat.addUser(userId);
+  res.json({ message: 'User added' });
 };
 
-// @desc  Remove user from group
-// @route PUT /api/chats/group/remove
-const removeFromGroup = async (req, res) => {
+exports.removeFromGroup = async (req, res) => {
   const { chatId, userId } = req.body;
-  try {
-    const removed = await Chat.findByIdAndUpdate(
-      chatId,
-      { $pull: { users: userId } },
-      { new: true }
-    )
-      .populate("users", "-password")
-      .populate("groupAdmin", "-password");
-    if (!removed) return res.status(404).json({ message: "Chat not found" });
-    res.json(removed);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-module.exports = {
-  accessChat,
-  fetchChats,
-  createGroupChat,
-  renameGroup,
-  addToGroup,
-  removeFromGroup,
+  const chat = await Chat.findByPk(chatId);
+  await chat.removeUser(userId);
+  res.json({ message: 'User removed' });
 };
