@@ -7,11 +7,12 @@ const { Server } = require("socket.io");
 const { connectDB } = require("./config/db");
 
 dotenv.config();
-connectDB();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+connectDB();
 
 // Routes
 app.use("/api/users", require("./routes/userRoutes"));
@@ -36,11 +37,9 @@ io.on("connection", (socket) => {
     socket.join(userData._id);
     socket.emit("connected");
   });
-
   socket.on("join chat", (room) => socket.join(room));
   socket.on("typing", (room) => socket.in(room).emit("typing"));
   socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
-
   socket.on("new message", (newMessage) => {
     const chat = newMessage.chat;
     if (!chat.users) return;
