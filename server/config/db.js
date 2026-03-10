@@ -10,7 +10,10 @@ const sequelize = new Sequelize(
     dialect: 'mysql',
     logging: false,
     dialectOptions: {
-      ssl: { rejectUnauthorized: false },
+      ssl: {
+        rejectUnauthorized: true,
+        ca: process.env.MYSQL_CA_CERT,
+      },
     },
   }
 );
@@ -18,7 +21,7 @@ const sequelize = new Sequelize(
 const connectDB = async () => {
   try {
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true }); // auto-creates all tables
+    await sequelize.sync({ alter: true });
     console.log('MySQL connected ✅');
   } catch (err) {
     console.error('MySQL connection error:', err);
