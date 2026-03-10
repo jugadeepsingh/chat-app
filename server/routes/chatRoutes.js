@@ -10,10 +10,11 @@ const {
 } = require("../controllers/chatController");
 const { protect } = require("../middleware/authMiddleware");
 
-router.route("/").post(protect, accessChat).get(protect, fetchChats);
-router.route("/group").post(protect, createGroupChat);
-router.route("/group/rename").put(protect, renameGroup);
-router.route("/group/add").put(protect, addToGroup);
-router.route("/group/remove").put(protect, removeFromGroup);
+router.post("/", protect, accessChat);
+router.get("/", protect, fetchChats);
+router.post("/group", protect, createGroupChat);
+router.put("/group/rename", protect, renameGroup);
+router.put("/group/add", protect, addToGroup);
+router.put("/group/remove", protect, removeFromGroup);
 
 module.exports = router;
