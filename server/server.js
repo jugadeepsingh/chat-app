@@ -3,7 +3,6 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-const connectDB = require("./config/db");
 
 // CHANGE THIS LINE at the top:
 const { connectDB } = require('./config/db');
