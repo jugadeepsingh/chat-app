@@ -35,6 +35,7 @@ exports.registerUser = async (req, res) => {
       name: user.name,
       email: user.email,
       pic: user.pic,
+      status: user.status,
       token: generateToken(user.id),
     });
   } catch (error) {
@@ -62,6 +63,7 @@ exports.loginUser = async (req, res) => {
         name: user.name,
         email: user.email,
         pic: user.pic,
+        status: user.status,
         token: generateToken(user.id),
       });
     }
@@ -88,7 +90,7 @@ exports.searchUsers = async (req, res) => {
           { email: { [Op.like]: `%${keyword}%` } },
         ],
       },
-      attributes: ["id", "name", "email", "pic"],
+      attributes: ["id", "name", "email", "pic", "status"],
     });
 
     return res.json(users);
@@ -96,6 +98,37 @@ exports.searchUsers = async (req, res) => {
     console.error("Search users error:", error);
     return res.status(500).json({
       message: "User search failed",
+      error: error.message,
+    });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.name = req.body.name || user.name;
+    user.status = req.body.status || user.status;
+    user.pic = req.body.pic || user.pic;
+
+    await user.save();
+
+    return res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      pic: user.pic,
+      status: user.status,
+      token: generateToken(user.id),
+    });
+  } catch (error) {
+    console.error("Profile update error:", error);
+    return res.status(500).json({
+      message: "Profile update failed",
       error: error.message,
     });
   }
