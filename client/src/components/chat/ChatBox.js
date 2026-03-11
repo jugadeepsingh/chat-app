@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import io from "socket.io-client";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
@@ -20,30 +20,38 @@ const formatTime = (dateStr) => {
 
 const ChatBox = () => {
   const { user } = useAuth();
-  const { selectedChat, setChats, notification, setNotification } = useChat();
+  const { selectedChat, setChats, setNotification } = useChat();
+
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [typing, setTyping] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
+
   const messagesEndRef = useRef(null);
   const typingTimeout = useRef(null);
   const selectedChatRef = useRef(selectedChat);
 
-  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+  useEffect(() => {
+    selectedChatRef.current = selectedChat;
+  }, [selectedChat]);
 
   // Socket setup
   useEffect(() => {
     socket = io(ENDPOINT);
     socket.emit("setup", user);
+
     socket.on("connected", () => setSocketConnected(true));
     socket.on("typing", () => setIsTyping(true));
     socket.on("stop typing", () => setIsTyping(false));
 
-    return () => { socket.disconnect(); };
+    return () => {
+      socket.disconnect();
+    };
   }, [user]);
 
+  // Message received
   useEffect(() => {
     socket.on("message received", (newMsg) => {
       if (!selectedChatRef.current || selectedChatRef.current._id !== newMsg.chat._id) {
@@ -54,24 +62,30 @@ const ChatBox = () => {
       } else {
         setMessages((prev) => [...prev, newMsg]);
       }
+
       setChats((prev) => {
         const updated = prev.map((c) =>
           c._id === newMsg.chat._id ? { ...c, latestMessage: newMsg } : c
         );
-        const sorted = [
+
+        return [
           updated.find((c) => c._id === newMsg.chat._id),
           ...updated.filter((c) => c._id !== newMsg.chat._id),
         ];
-        return sorted;
       });
     });
-    return () => { socket.off("message received"); };
-  }, []);
 
-  // Fetch messages when chat selected
+    return () => {
+      socket.off("message received");
+    };
+  }, [setChats, setNotification]);
+
+  // Fetch messages
   useEffect(() => {
     if (!selectedChat) return;
+
     setLoading(true);
+
     fetchMessagesAPI(selectedChat._id)
       .then(({ data }) => {
         setMessages(data);
@@ -88,12 +102,16 @@ const ChatBox = () => {
 
   const handleTyping = (e) => {
     setInput(e.target.value);
+
     if (!socketConnected) return;
+
     if (!typing) {
       setTyping(true);
       socket.emit("typing", selectedChat._id);
     }
+
     clearTimeout(typingTimeout.current);
+
     typingTimeout.current = setTimeout(() => {
       socket.emit("stop typing", selectedChat._id);
       setTyping(false);
@@ -102,17 +120,27 @@ const ChatBox = () => {
 
   const sendMessage = async () => {
     if (!input.trim()) return;
+
     socket.emit("stop typing", selectedChat._id);
+
     const content = input.trim();
     setInput("");
+
     try {
-      const { data } = await sendMessageAPI({ content, chatId: selectedChat._id });
+      const { data } = await sendMessageAPI({
+        content,
+        chatId: selectedChat._id,
+      });
+
       socket.emit("new message", data);
+
       setMessages((prev) => [...prev, data]);
+
       setChats((prev) => {
         const updated = prev.map((c) =>
           c._id === data.chat._id ? { ...c, latestMessage: data } : c
         );
+
         return [
           updated.find((c) => c._id === data.chat._id),
           ...updated.filter((c) => c._id !== data.chat._id),
@@ -166,29 +194,30 @@ const ChatBox = () => {
 
         {messages.map((msg, i) => {
           const isSent = msg.sender?._id === user._id;
+
           const showName =
-            selectedChat.isGroupChat && !isSent &&
+            selectedChat.isGroupChat &&
+            !isSent &&
             (i === 0 || messages[i - 1]?.sender?._id !== msg.sender?._id);
 
           return (
             <div key={msg._id || i} className={`message-wrapper ${isSent ? "sent" : ""}`}>
               {!isSent && <Avatar user={msg.sender} size={28} />}
+
               <div style={{ display: "flex", flexDirection: "column", maxWidth: "65%" }}>
-                {showName && (
-                  <div className="message-sender-name">{msg.sender?.name}</div>
-                )}
+                {showName && <div className="message-sender-name">{msg.sender?.name}</div>}
+
                 <div className={`message-bubble ${isSent ? "sent" : "received"}`}>
                   {msg.content}
                 </div>
+
                 <div className="message-time">{formatTime(msg.createdAt)}</div>
               </div>
             </div>
           );
         })}
 
-        {isTyping && (
-          <div className="typing-indicator">typing...</div>
-        )}
+        {isTyping && <div className="typing-indicator">typing...</div>}
 
         <div ref={messagesEndRef} />
       </div>
@@ -207,6 +236,7 @@ const ChatBox = () => {
             }
           }}
         />
+
         <button className="send-btn" onClick={sendMessage} disabled={!input.trim()}>
           ➤
         </button>
