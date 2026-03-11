@@ -5,7 +5,11 @@ import { useChat } from "../../context/ChatContext";
 import { fetchMessagesAPI, sendMessageAPI } from "../../utils/api";
 import Avatar from "../layout/Avatar";
 
-const ENDPOINT = "http://localhost:5000";
+const ENDPOINT =
+  process.env.NODE_ENV === "production"
+    ? "https://chat-app-1-9di1.onrender.com"
+    : "http://localhost:5000";
+
 let socket;
 
 const getSender = (chat, currentUser) => {
@@ -39,7 +43,13 @@ const ChatBox = () => {
 
   // Socket setup
   useEffect(() => {
-    socket = io(ENDPOINT);
+    if (!user) return;
+
+    socket = io(ENDPOINT, {
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
+
     socket.emit("setup", user);
 
     socket.on("connected", () => setSocketConnected(true));
@@ -53,6 +63,8 @@ const ChatBox = () => {
 
   // Message received
   useEffect(() => {
+    if (!socket) return;
+
     socket.on("message received", (newMsg) => {
       if (!selectedChatRef.current || selectedChatRef.current._id !== newMsg.chat._id) {
         setNotification((prev) => {
@@ -71,7 +83,7 @@ const ChatBox = () => {
         return [
           updated.find((c) => c._id === newMsg.chat._id),
           ...updated.filter((c) => c._id !== newMsg.chat._id),
-        ];
+        ].filter(Boolean);
       });
     });
 
@@ -82,7 +94,7 @@ const ChatBox = () => {
 
   // Fetch messages
   useEffect(() => {
-    if (!selectedChat) return;
+    if (!selectedChat || !socket) return;
 
     setLoading(true);
 
@@ -103,7 +115,7 @@ const ChatBox = () => {
   const handleTyping = (e) => {
     setInput(e.target.value);
 
-    if (!socketConnected) return;
+    if (!socketConnected || !selectedChat) return;
 
     if (!typing) {
       setTyping(true);
@@ -119,7 +131,7 @@ const ChatBox = () => {
   };
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || !selectedChat) return;
 
     socket.emit("stop typing", selectedChat._id);
 
@@ -144,7 +156,7 @@ const ChatBox = () => {
         return [
           updated.find((c) => c._id === data.chat._id),
           ...updated.filter((c) => c._id !== data.chat._id),
-        ];
+        ].filter(Boolean);
       });
     } catch {}
   };
