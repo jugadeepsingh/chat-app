@@ -19,6 +19,7 @@ const getSenderObj = (chat, currentUser) => {
 const Sidebar = () => {
   const { user } = useAuth();
   const { chats, setChats, selectedChat, setSelectedChat, notification, setNotification } = useChat();
+
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -27,25 +28,38 @@ const Sidebar = () => {
 
   useEffect(() => {
     if (!user) return;
-    fetchChatsAPI().then(({ data }) => setChats(data)).catch(() => {});
-  }, [user]);
+
+    fetchChatsAPI()
+      .then(({ data }) => setChats(data))
+      .catch(() => {});
+  }, [user, setChats]); // ✅ FIXED dependency
 
   const handleSearch = async (val) => {
     setSearch(val);
-    if (!val.trim()) { setSearchResults([]); return; }
+
+    if (!val.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
     setSearching(true);
+
     try {
       const { data } = await searchUsersAPI(val);
       setSearchResults(data);
     } catch {}
+
     setSearching(false);
   };
 
   const handleUserClick = async (u) => {
     try {
       const { data } = await accessChatAPI(u._id);
-      if (!chats.find((c) => c._id === data._id))
+
+      if (!chats.find((c) => c._id === data._id)) {
         setChats([data, ...chats]);
+      }
+
       setSelectedChat(data);
       setSearch("");
       setSearchResults([]);
@@ -58,22 +72,32 @@ const Sidebar = () => {
         <div className="sidebar-header">
           <div className="sidebar-top">
             <span className="app-logo">💬 ChatApp</span>
+
             <div style={{ display: "flex", gap: 8 }}>
               <div className="icon-btn-wrapper">
-                <button className="icon-btn" onClick={() => setShowGroup(true)} title="New Group">
+                <button
+                  className="icon-btn"
+                  onClick={() => setShowGroup(true)}
+                  title="New Group"
+                >
                   👥
                 </button>
               </div>
+
               <div className="icon-btn-wrapper">
                 <button className="icon-btn" title="Notifications">
                   🔔
                 </button>
+
                 {notification.length > 0 && (
-                  <span className="notification-badge">{notification.length}</span>
+                  <span className="notification-badge">
+                    {notification.length}
+                  </span>
                 )}
               </div>
             </div>
           </div>
+
           <input
             className="search-input"
             placeholder="Search users or chats..."
@@ -85,15 +109,26 @@ const Sidebar = () => {
         <div className="chat-list">
           {search && (
             <>
-              <div style={{ padding: "8px 16px 4px", fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: 1 }}>
+              <div
+                style={{
+                  padding: "8px 16px 4px",
+                  fontSize: 11,
+                  color: "#475569",
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
                 Search Results
               </div>
+
               {searching && (
                 <div className="empty-chat-list">Searching...</div>
               )}
+
               {!searching && searchResults.length === 0 && search && (
                 <div className="empty-chat-list">No users found</div>
               )}
+
               {searchResults.map((u) => (
                 <div
                   key={u._id}
@@ -101,12 +136,14 @@ const Sidebar = () => {
                   onClick={() => handleUserClick(u)}
                 >
                   <Avatar user={u} />
+
                   <div className="chat-info">
                     <div className="chat-name">{u.name}</div>
                     <div className="chat-preview">{u.email}</div>
                   </div>
                 </div>
               ))}
+
               <div className="divider" style={{ margin: "8px 0" }} />
             </>
           )}
@@ -120,21 +157,30 @@ const Sidebar = () => {
           {chats.map((chat) => {
             const sender = getSenderObj(chat, user);
             const isActive = selectedChat?._id === chat._id;
+
             return (
               <div
                 key={chat._id}
                 className={`chat-item ${isActive ? "active" : ""}`}
                 onClick={() => {
                   setSelectedChat(chat);
-                  setNotification(notification.filter((n) => n.chat._id !== chat._id));
+                  setNotification(
+                    notification.filter((n) => n.chat._id !== chat._id)
+                  );
                 }}
               >
                 <Avatar user={sender} />
+
                 <div className="chat-info">
-                  <div className="chat-name">{getSenderName(chat, user)}</div>
+                  <div className="chat-name">
+                    {getSenderName(chat, user)}
+                  </div>
+
                   <div className="chat-preview">
                     {chat.latestMessage
-                      ? `${chat.latestMessage.sender?.name?.split(" ")[0]}: ${chat.latestMessage.content || "📎 File"}`
+                      ? `${chat.latestMessage.sender?.name?.split(" ")[0]}: ${
+                          chat.latestMessage.content || "📎 File"
+                        }`
                       : "No messages yet"}
                   </div>
                 </div>
@@ -145,8 +191,14 @@ const Sidebar = () => {
 
         <div className="sidebar-footer">
           <Avatar user={user} size={36} />
+
           <span className="user-name-small">{user?.name}</span>
-          <button className="icon-btn" onClick={() => setShowProfile(true)} title="Profile">
+
+          <button
+            className="icon-btn"
+            onClick={() => setShowProfile(true)}
+            title="Profile"
+          >
             ⚙️
           </button>
         </div>
