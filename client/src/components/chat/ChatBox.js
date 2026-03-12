@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { fetchMessagesAPI, sendMessageAPI } from "../../utils/api";
 import Avatar from "../layout/Avatar";
+import GroupInfoModal from "./GroupInfoModal";
 
 const ENDPOINT =
   process.env.NODE_ENV === "production"
@@ -12,10 +13,9 @@ const ENDPOINT =
 
 let socket;
 
-// FIX: use .id not ._id
 const getSender = (chat, currentUser) => {
   if (chat.isGroupChat) return { name: chat.chatName, isGroup: true };
-  return chat.users?.find((u) => u.id !== currentUser.id) || {};
+  return chat.users?.find((u) => u.id !== currentUser?.id) || {};
 };
 
 const formatTime = (dateStr) => {
@@ -33,6 +33,7 @@ const ChatBox = () => {
   const [typing, setTyping] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const messagesEndRef = useRef(null);
   const typingTimeout = useRef(null);
@@ -45,32 +46,22 @@ const ChatBox = () => {
   // Socket setup
   useEffect(() => {
     if (!user) return;
-
     socket = io(ENDPOINT, {
       withCredentials: true,
       transports: ["websocket", "polling"],
     });
-
     socket.emit("setup", user);
     socket.on("connected", () => setSocketConnected(true));
     socket.on("typing", () => setIsTyping(true));
     socket.on("stop typing", () => setIsTyping(false));
-
-    return () => {
-      socket.disconnect();
-    };
+    return () => { socket.disconnect(); };
   }, [user]);
 
   // Message received
   useEffect(() => {
     if (!socket) return;
-
     socket.on("message received", (newMsg) => {
-      // FIX: use .id not ._id
-      if (
-        !selectedChatRef.current ||
-        selectedChatRef.current.id !== newMsg.chatId
-      ) {
+      if (!selectedChatRef.current || selectedChatRef.current.id !== newMsg.chatId) {
         setNotification((prev) => {
           if (!prev.find((n) => n.id === newMsg.id)) return [newMsg, ...prev];
           return prev;
@@ -78,9 +69,7 @@ const ChatBox = () => {
       } else {
         setMessages((prev) => [...prev, newMsg]);
       }
-
       setChats((prev) => {
-        // FIX: use .id not ._id
         const updated = prev.map((c) =>
           c.id === newMsg.chatId ? { ...c, latestMessageId: newMsg.id } : c
         );
@@ -90,17 +79,14 @@ const ChatBox = () => {
         ].filter(Boolean);
       });
     });
-
-    return () => {
-      socket.off("message received");
-    };
+    return () => { socket.off("message received"); };
   }, [setChats, setNotification]);
 
-  // Fetch messages — FIX: use selectedChat.id not selectedChat._id
+  // Fetch messages
   useEffect(() => {
     if (!selectedChat?.id || !socket) return;
-
     setLoading(true);
+    setMessages([]);
     fetchMessagesAPI(selectedChat.id)
       .then(({ data }) => {
         setMessages(data);
@@ -118,38 +104,27 @@ const ChatBox = () => {
   const handleTyping = (e) => {
     setInput(e.target.value);
     if (!socketConnected || !selectedChat) return;
-
     if (!typing) {
       setTyping(true);
-      socket.emit("typing", selectedChat.id); // FIX: .id
+      socket.emit("typing", selectedChat.id);
     }
-
     clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
-      socket.emit("stop typing", selectedChat.id); // FIX: .id
+      socket.emit("stop typing", selectedChat.id);
       setTyping(false);
     }, 1500);
   };
 
   const sendMessage = async () => {
     if (!input.trim() || !selectedChat?.id) return;
-
-    socket.emit("stop typing", selectedChat.id); // FIX: .id
-
+    socket.emit("stop typing", selectedChat.id);
     const content = input.trim();
     setInput("");
-
     try {
-      const { data } = await sendMessageAPI({
-        content,
-        chatId: selectedChat.id, // FIX: .id
-      });
-
+      const { data } = await sendMessageAPI({ content, chatId: selectedChat.id });
       socket.emit("new message", data);
       setMessages((prev) => [...prev, data]);
-
       setChats((prev) => {
-        // FIX: use .id and .chatId
         const updated = prev.map((c) =>
           c.id === data.chatId ? { ...c, latestMessageId: data.id } : c
         );
@@ -179,6 +154,7 @@ const ChatBox = () => {
 
   return (
     <div className="chat-area">
+      {/* Header */}
       <div className="chat-header">
         <Avatar user={sender} />
         <div className="chat-header-info">
@@ -186,39 +162,47 @@ const ChatBox = () => {
           <div className="chat-header-status">
             {sender.isGroup
               ? `${selectedChat.users?.length} members`
-              : isTyping
-              ? "typing..."
-              : "online"}
+              : isTyping ? "typing..." : "online"}
           </div>
         </div>
+        {/* Group info button */}
+        {selectedChat.isGroupChat && (
+          <button
+            onClick={() => setShowGroupInfo(true)}
+            style={{
+              marginLeft: "auto",
+              background: "rgba(102,126,234,0.15)",
+              border: "1px solid rgba(102,126,234,0.3)",
+              color: "#667eea", borderRadius: 8,
+              padding: "6px 14px", cursor: "pointer", fontSize: 13
+            }}
+          >
+            ⚙ Group Info
+          </button>
+        )}
       </div>
 
+      {/* Messages */}
       <div className="messages-container">
         {loading && (
           <div style={{ color: "#475569", fontSize: 13, textAlign: "center", padding: 20 }}>
             Loading messages...
           </div>
         )}
-
         {!loading && messages.length === 0 && (
           <div style={{ color: "#475569", fontSize: 13, textAlign: "center", padding: 20 }}>
             No messages yet. Say hello! 👋
           </div>
         )}
-
         {messages.map((msg, i) => {
-          // FIX: use .id not ._id
-          const isSent = msg.sender?.id === user.id;
-
+          const isSent = msg.sender?.id === user?.id;
           const showName =
-            selectedChat.isGroupChat &&
-            !isSent &&
+            selectedChat.isGroupChat && !isSent &&
             (i === 0 || messages[i - 1]?.sender?.id !== msg.sender?.id);
 
           return (
             <div key={msg.id || i} className={`message-wrapper ${isSent ? "sent" : ""}`}>
               {!isSent && <Avatar user={msg.sender} size={28} />}
-
               <div style={{ display: "flex", flexDirection: "column", maxWidth: "65%" }}>
                 {showName && (
                   <div className="message-sender-name">{msg.sender?.name}</div>
@@ -231,11 +215,11 @@ const ChatBox = () => {
             </div>
           );
         })}
-
         {isTyping && <div className="typing-indicator">typing...</div>}
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input */}
       <div className="message-input-area">
         <textarea
           className="message-input"
@@ -254,6 +238,9 @@ const ChatBox = () => {
           ➤
         </button>
       </div>
+
+      {/* Group Info Modal */}
+      {showGroupInfo && <GroupInfoModal onClose={() => setShowGroupInfo(false)} />}
     </div>
   );
 };
