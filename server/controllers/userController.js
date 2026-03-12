@@ -80,17 +80,25 @@ exports.loginUser = async (req, res) => {
 
 exports.searchUsers = async (req, res) => {
   try {
-    const keyword = req.query.search || "";
+    const keyword = (req.query.search || "").trim();
+
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const users = await User.findAll({
       where: {
-        id: { [Op.ne]: req.user.id },
-        [Op.or]: [
-          { name: { [Op.like]: `%${keyword}%` } },
-          { email: { [Op.like]: `%${keyword}%` } },
+        [Op.and]: [
+          { id: { [Op.ne]: req.user.id } },
+          {
+            [Op.or]: [
+              { name: { [Op.like]: `%${keyword}%` } },
+              { email: { [Op.like]: `%${keyword}%` } },
+            ],
+          },
         ],
       },
-      attributes: ["id", "name", "email", "pic", "status"],
+      attributes: ["id", "name", "email", "pic"],
     });
 
     return res.json(users);
