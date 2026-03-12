@@ -1,212 +1,130 @@
-import React, { useEffect, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
+import React, { useState, useEffect } from "react";
 import { useChat } from "../../context/ChatContext";
-import { fetchChatsAPI, accessChatAPI, searchUsersAPI } from "../../utils/api";
-import Avatar from "../layout/Avatar";
-import ProfileModal from "../chat/ProfileModal";
-import GroupChatModal from "../chat/GroupChatModal";
-
-const getSenderName = (chat, currentUser) => {
-  if (chat.isGroupChat) return chat.chatName;
-  return chat.users.find((u) => u._id !== currentUser._id)?.name || "Unknown";
-};
-
-const getSenderObj = (chat, currentUser) => {
-  if (chat.isGroupChat) return { name: chat.chatName };
-  return chat.users.find((u) => u._id !== currentUser._id) || {};
-};
+import { searchUsersAPI, accessChatAPI, fetchChatsAPI } from "../../utils/api";
 
 const Sidebar = () => {
-  const { user } = useAuth();
-  const { chats, setChats, selectedChat, setSelectedChat, notification, setNotification } = useChat();
-
-  const [search, setSearch] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showGroup, setShowGroup] = useState(false);
+  const [loading, setLoading] = useState(false);
 
+  const { setSelectedChat, chats, setChats } = useChat();
+
+  // Load all chats on mount — only once
   useEffect(() => {
-    if (!user) return;
+    const loadChats = async () => {
+      try {
+        const { data } = await fetchChatsAPI();
+        setChats(data);
+      } catch (err) {
+        console.error("Failed to load chats:", err);
+      }
+    };
+    loadChats();
+  }, []); // <-- empty array = runs ONCE only, fixes the loop
 
-    fetchChatsAPI()
-      .then(({ data }) => setChats(data))
-      .catch(() => {});
-  }, [user, setChats]); // ✅ FIXED dependency
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchText);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchText]);
 
-  const handleSearch = async (val) => {
-    setSearch(val);
-
-    if (!val.trim()) {
+  // Call search API only when debounced value changes
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
       setSearchResults([]);
       return;
     }
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const { data } = await searchUsersAPI(debouncedSearch); // uses api.js interceptor
+        setSearchResults(data);
+      } catch (err) {
+        console.error("Search error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, [debouncedSearch]);
 
-    setSearching(true);
-
+  const handleSelectUser = async (userId) => {
     try {
-      const { data } = await searchUsersAPI(val);
-      setSearchResults(data);
-    } catch {}
-
-    setSearching(false);
-  };
-
-  const handleUserClick = async (u) => {
-    try {
-      const { data } = await accessChatAPI(u._id);
-
-      if (!chats.find((c) => c._id === data._id)) {
+      const { data } = await accessChatAPI(userId); // uses api.js interceptor
+      setSelectedChat(data);
+      setSearchResults([]);
+      setSearchText("");
+      if (!chats.find((c) => c.id === data.id)) {
         setChats([data, ...chats]);
       }
-
-      setSelectedChat(data);
-      setSearch("");
-      setSearchResults([]);
-    } catch {}
+    } catch (err) {
+      console.error("Access chat error:", err);
+    }
   };
 
   return (
-    <>
-      <div className="sidebar">
-        <div className="sidebar-header">
-          <div className="sidebar-top">
-            <span className="app-logo">💬 ChatApp</span>
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <div className="icon-btn-wrapper">
-                <button
-                  className="icon-btn"
-                  onClick={() => setShowGroup(true)}
-                  title="New Group"
-                >
-                  👥
-                </button>
-              </div>
-
-              <div className="icon-btn-wrapper">
-                <button className="icon-btn" title="Notifications">
-                  🔔
-                </button>
-
-                {notification.length > 0 && (
-                  <span className="notification-badge">
-                    {notification.length}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <input
-            className="search-input"
-            placeholder="Search users or chats..."
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="chat-list">
-          {search && (
-            <>
-              <div
-                style={{
-                  padding: "8px 16px 4px",
-                  fontSize: 11,
-                  color: "#475569",
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                }}
-              >
-                Search Results
-              </div>
-
-              {searching && (
-                <div className="empty-chat-list">Searching...</div>
-              )}
-
-              {!searching && searchResults.length === 0 && search && (
-                <div className="empty-chat-list">No users found</div>
-              )}
-
-              {searchResults.map((u) => (
-                <div
-                  key={u._id}
-                  className="chat-item"
-                  onClick={() => handleUserClick(u)}
-                >
-                  <Avatar user={u} />
-
-                  <div className="chat-info">
-                    <div className="chat-name">{u.name}</div>
-                    <div className="chat-preview">{u.email}</div>
-                  </div>
-                </div>
-              ))}
-
-              <div className="divider" style={{ margin: "8px 0" }} />
-            </>
-          )}
-
-          {!search && chats.length === 0 && (
-            <div className="empty-chat-list">
-              Search users above to start chatting
-            </div>
-          )}
-
-          {chats.map((chat) => {
-            const sender = getSenderObj(chat, user);
-            const isActive = selectedChat?._id === chat._id;
-
-            return (
-              <div
-                key={chat._id}
-                className={`chat-item ${isActive ? "active" : ""}`}
-                onClick={() => {
-                  setSelectedChat(chat);
-                  setNotification(
-                    notification.filter((n) => n.chat._id !== chat._id)
-                  );
-                }}
-              >
-                <Avatar user={sender} />
-
-                <div className="chat-info">
-                  <div className="chat-name">
-                    {getSenderName(chat, user)}
-                  </div>
-
-                  <div className="chat-preview">
-                    {chat.latestMessage
-                      ? `${chat.latestMessage.sender?.name?.split(" ")[0]}: ${
-                          chat.latestMessage.content || "📎 File"
-                        }`
-                      : "No messages yet"}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="sidebar-footer">
-          <Avatar user={user} size={36} />
-
-          <span className="user-name-small">{user?.name}</span>
-
-          <button
-            className="icon-btn"
-            onClick={() => setShowProfile(true)}
-            title="Profile"
-          >
-            ⚙️
-          </button>
-        </div>
+    <div className="sidebar">
+      <div className="sidebar-header">
+        <h2>ChatApp</h2>
       </div>
 
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
-      {showGroup && <GroupChatModal onClose={() => setShowGroup(false)} />}
-    </>
+      <div className="search-box">
+        <input
+          type="text"
+          placeholder="Search users..."
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+        />
+      </div>
+
+      {loading && <p style={{ padding: "0 16px" }}>Searching...</p>}
+
+      {/* Search Results */}
+      {searchResults.length > 0 && (
+        <div className="search-results">
+          <p className="search-label">SEARCH RESULTS</p>
+          {searchResults.map((user) => (
+            <div
+              key={user.id}
+              className="user-item"
+              onClick={() => handleSelectUser(user.id)}
+            >
+              <img src={user.pic} alt={user.name} className="avatar" />
+              <div>
+                <p className="user-name">{user.name}</p>
+                <p className="user-email">{user.email}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Existing Chats List — only shown when not searching */}
+      {!searchText && chats.length > 0 && (
+        <div className="chats-list">
+          {chats.map((chat) => (
+            <div
+              key={chat.id}
+              className="chat-item"
+              onClick={() => setSelectedChat(chat)}
+            >
+              <div className="chat-name">
+                {chat.isGroupChat
+                  ? chat.chatName
+                  : chat.users?.find(
+                      (u) =>
+                        u.id !==
+                        JSON.parse(localStorage.getItem("chatapp-user"))?.id
+                    )?.name || chat.chatName}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 

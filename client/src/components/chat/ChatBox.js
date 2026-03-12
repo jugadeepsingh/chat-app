@@ -12,9 +12,10 @@ const ENDPOINT =
 
 let socket;
 
+// FIX: use .id not ._id
 const getSender = (chat, currentUser) => {
   if (chat.isGroupChat) return { name: chat.chatName, isGroup: true };
-  return chat.users.find((u) => u._id !== currentUser._id) || {};
+  return chat.users?.find((u) => u.id !== currentUser.id) || {};
 };
 
 const formatTime = (dateStr) => {
@@ -51,7 +52,6 @@ const ChatBox = () => {
     });
 
     socket.emit("setup", user);
-
     socket.on("connected", () => setSocketConnected(true));
     socket.on("typing", () => setIsTyping(true));
     socket.on("stop typing", () => setIsTyping(false));
@@ -66,9 +66,13 @@ const ChatBox = () => {
     if (!socket) return;
 
     socket.on("message received", (newMsg) => {
-      if (!selectedChatRef.current || selectedChatRef.current._id !== newMsg.chat._id) {
+      // FIX: use .id not ._id
+      if (
+        !selectedChatRef.current ||
+        selectedChatRef.current.id !== newMsg.chatId
+      ) {
         setNotification((prev) => {
-          if (!prev.find((n) => n._id === newMsg._id)) return [newMsg, ...prev];
+          if (!prev.find((n) => n.id === newMsg.id)) return [newMsg, ...prev];
           return prev;
         });
       } else {
@@ -76,13 +80,13 @@ const ChatBox = () => {
       }
 
       setChats((prev) => {
+        // FIX: use .id not ._id
         const updated = prev.map((c) =>
-          c._id === newMsg.chat._id ? { ...c, latestMessage: newMsg } : c
+          c.id === newMsg.chatId ? { ...c, latestMessageId: newMsg.id } : c
         );
-
         return [
-          updated.find((c) => c._id === newMsg.chat._id),
-          ...updated.filter((c) => c._id !== newMsg.chat._id),
+          updated.find((c) => c.id === newMsg.chatId),
+          ...updated.filter((c) => c.id !== newMsg.chatId),
         ].filter(Boolean);
       });
     });
@@ -92,18 +96,17 @@ const ChatBox = () => {
     };
   }, [setChats, setNotification]);
 
-  // Fetch messages
+  // Fetch messages — FIX: use selectedChat.id not selectedChat._id
   useEffect(() => {
-    if (!selectedChat || !socket) return;
+    if (!selectedChat?.id || !socket) return;
 
     setLoading(true);
-
-    fetchMessagesAPI(selectedChat._id)
+    fetchMessagesAPI(selectedChat.id)
       .then(({ data }) => {
         setMessages(data);
-        socket.emit("join chat", selectedChat._id);
+        socket.emit("join chat", selectedChat.id);
       })
-      .catch(() => {})
+      .catch((err) => console.error("Fetch messages error:", err))
       .finally(() => setLoading(false));
   }, [selectedChat]);
 
@@ -114,26 +117,24 @@ const ChatBox = () => {
 
   const handleTyping = (e) => {
     setInput(e.target.value);
-
     if (!socketConnected || !selectedChat) return;
 
     if (!typing) {
       setTyping(true);
-      socket.emit("typing", selectedChat._id);
+      socket.emit("typing", selectedChat.id); // FIX: .id
     }
 
     clearTimeout(typingTimeout.current);
-
     typingTimeout.current = setTimeout(() => {
-      socket.emit("stop typing", selectedChat._id);
+      socket.emit("stop typing", selectedChat.id); // FIX: .id
       setTyping(false);
     }, 1500);
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || !selectedChat) return;
+    if (!input.trim() || !selectedChat?.id) return;
 
-    socket.emit("stop typing", selectedChat._id);
+    socket.emit("stop typing", selectedChat.id); // FIX: .id
 
     const content = input.trim();
     setInput("");
@@ -141,24 +142,25 @@ const ChatBox = () => {
     try {
       const { data } = await sendMessageAPI({
         content,
-        chatId: selectedChat._id,
+        chatId: selectedChat.id, // FIX: .id
       });
 
       socket.emit("new message", data);
-
       setMessages((prev) => [...prev, data]);
 
       setChats((prev) => {
+        // FIX: use .id and .chatId
         const updated = prev.map((c) =>
-          c._id === data.chat._id ? { ...c, latestMessage: data } : c
+          c.id === data.chatId ? { ...c, latestMessageId: data.id } : c
         );
-
         return [
-          updated.find((c) => c._id === data.chat._id),
-          ...updated.filter((c) => c._id !== data.chat._id),
+          updated.find((c) => c.id === data.chatId),
+          ...updated.filter((c) => c.id !== data.chatId),
         ].filter(Boolean);
       });
-    } catch {}
+    } catch (err) {
+      console.error("Send message error:", err);
+    }
   };
 
   if (!selectedChat) {
@@ -183,7 +185,7 @@ const ChatBox = () => {
           <div className="chat-header-name">{sender.name}</div>
           <div className="chat-header-status">
             {sender.isGroup
-              ? `${selectedChat.users.length} members`
+              ? `${selectedChat.users?.length} members`
               : isTyping
               ? "typing..."
               : "online"}
@@ -205,24 +207,25 @@ const ChatBox = () => {
         )}
 
         {messages.map((msg, i) => {
-          const isSent = msg.sender?._id === user._id;
+          // FIX: use .id not ._id
+          const isSent = msg.sender?.id === user.id;
 
           const showName =
             selectedChat.isGroupChat &&
             !isSent &&
-            (i === 0 || messages[i - 1]?.sender?._id !== msg.sender?._id);
+            (i === 0 || messages[i - 1]?.sender?.id !== msg.sender?.id);
 
           return (
-            <div key={msg._id || i} className={`message-wrapper ${isSent ? "sent" : ""}`}>
+            <div key={msg.id || i} className={`message-wrapper ${isSent ? "sent" : ""}`}>
               {!isSent && <Avatar user={msg.sender} size={28} />}
 
               <div style={{ display: "flex", flexDirection: "column", maxWidth: "65%" }}>
-                {showName && <div className="message-sender-name">{msg.sender?.name}</div>}
-
+                {showName && (
+                  <div className="message-sender-name">{msg.sender?.name}</div>
+                )}
                 <div className={`message-bubble ${isSent ? "sent" : "received"}`}>
                   {msg.content}
                 </div>
-
                 <div className="message-time">{formatTime(msg.createdAt)}</div>
               </div>
             </div>
@@ -230,7 +233,6 @@ const ChatBox = () => {
         })}
 
         {isTyping && <div className="typing-indicator">typing...</div>}
-
         <div ref={messagesEndRef} />
       </div>
 
@@ -248,7 +250,6 @@ const ChatBox = () => {
             }
           }}
         />
-
         <button className="send-btn" onClick={sendMessage} disabled={!input.trim()}>
           ➤
         </button>
