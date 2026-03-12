@@ -31,13 +31,13 @@ exports.accessChat = async (req, res) => {
 
 exports.fetchChats = async (req, res) => {
   try {
-    // Use correct lowercase column name 'userId' from our explicit definition
+    // Use capital UserId — that's what Sequelize auto-created in DB originally
     const userChatRows = await ChatUsers.findAll({
-      where: { userId: req.user.id },
-      attributes: ['chatId'],
+      where: { UserId: req.user.id },
+      attributes: ['ChatId'],
     });
 
-    const chatIds = userChatRows.map((row) => row.chatId);
+    const chatIds = userChatRows.map((row) => row.ChatId);
 
     if (chatIds.length === 0) return res.json([]);
 

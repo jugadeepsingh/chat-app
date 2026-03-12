@@ -3,22 +3,10 @@ const User    = require('./User');
 const Chat    = require('./Chat');
 const Message = require('./Message');
 
-// Users ↔ Chats (many-to-many) — explicit foreign keys
+// Users ↔ Chats (many-to-many)
 const ChatUsers = sequelize.define('ChatUsers', {}, { timestamps: false });
-
-User.belongsToMany(Chat, { 
-  through: ChatUsers, 
-  as: 'chats',
-  foreignKey: 'userId',
-  otherKey: 'chatId'
-});
-
-Chat.belongsToMany(User, { 
-  through: ChatUsers, 
-  as: 'users',
-  foreignKey: 'chatId',
-  otherKey: 'userId'
-});
+User.belongsToMany(Chat, { through: ChatUsers, as: 'chats' });
+Chat.belongsToMany(User, { through: ChatUsers, as: 'users' });
 
 // Messages
 Message.belongsTo(User, { as: 'sender', foreignKey: 'senderId' });
