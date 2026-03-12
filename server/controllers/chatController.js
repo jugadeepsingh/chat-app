@@ -31,15 +31,16 @@ exports.accessChat = async (req, res) => {
 
 exports.fetchChats = async (req, res) => {
   try {
-    // Step 1: find all chatIds this user belongs to
-    const userChatIds = await ChatUsers.findAll({
-      where: { UserId: req.user.id },
-      attributes: ['ChatId'],
+    // Use correct lowercase column name 'userId' from our explicit definition
+    const userChatRows = await ChatUsers.findAll({
+      where: { userId: req.user.id },
+      attributes: ['chatId'],
     });
 
-    const chatIds = userChatIds.map((row) => row.ChatId);
+    const chatIds = userChatRows.map((row) => row.chatId);
 
-    // Step 2: fetch those chats with all their users
+    if (chatIds.length === 0) return res.json([]);
+
     const chats = await Chat.findAll({
       where: { id: { [Op.in]: chatIds } },
       include: [{
