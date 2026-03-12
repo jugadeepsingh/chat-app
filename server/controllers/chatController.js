@@ -1,4 +1,5 @@
-const { Chat, User } = require('../models');
+const { Chat, User, ChatUsers } = require('../models');
+const { Op } = require('sequelize');
 
 exports.accessChat = async (req, res) => {
   try {
@@ -30,14 +31,25 @@ exports.accessChat = async (req, res) => {
 
 exports.fetchChats = async (req, res) => {
   try {
+    // Step 1: find all chatIds this user belongs to
+    const userChatIds = await ChatUsers.findAll({
+      where: { UserId: req.user.id },
+      attributes: ['ChatId'],
+    });
+
+    const chatIds = userChatIds.map((row) => row.ChatId);
+
+    // Step 2: fetch those chats with all their users
     const chats = await Chat.findAll({
+      where: { id: { [Op.in]: chatIds } },
       include: [{
         model: User,
         as: 'users',
-        where: { id: req.user.id },
         attributes: ['id', 'name', 'email', 'pic'],
       }],
+      order: [['updatedAt', 'DESC']],
     });
+
     res.json(chats);
   } catch (err) {
     res.status(500).json({ message: err.message });
